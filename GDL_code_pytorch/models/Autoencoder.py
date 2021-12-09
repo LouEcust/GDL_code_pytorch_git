@@ -1,6 +1,7 @@
 import numpy as np
-from .torch_commons import *
-# import torch.nn as nn
+import torch
+
+from models.torch_commons import *  # from .torch_commons import * 表示在当前(指引用的时候的)文件夹下寻找，会在03_01报错
 from typing import List
 
 
@@ -10,7 +11,7 @@ class Autoencoder(Module):
 
         assert len(input_x_to_determine_size.shape) == 4
         assert len(enc_out_c) == len(enc_ks) == len(enc_strides) == len(enc_pads) and len(enc_out_c) > 1
-        assert len(dec_out_c) == len(dec_ks) == len(dec_strides) == len(dec_pads) and len(dnc_out_c) > 1
+        assert len(dec_out_c) == len(dec_ks) == len(dec_strides) == len(dec_pads) and len(dec_out_c) > 1
 
         enc_conv_layers = []
         enc_out_c.insert(0, in_c)
@@ -39,15 +40,23 @@ class Autoencoder(Module):
         # run through part of model once to determine sizes dynamically
         x = nn.Sequential(*enc_conv_layers)(input_x_to_determine_size)
         pre_flatten_shape = x.shape
-        x = Flatten(bs=True)(x)
+        x = Flatten(bs=True)(x)  # return x.view(x.shape[0], -1) if self.bs else x.view(-1)
 
         enc_conv_layers.append(Flatten(bs=True))
-        enc_conv_layers.append(nn.Linear(x.shape[1], z_dim))
+        enc_conv_layers.append(nn.Linear(x.shape[1], z_dim))  # (3136,2)
         self.enc_conv_layers = nn.Sequential(*enc_conv_layers)
-        dec_conv_layers.insert(0, nn.Linear(z_dim, np.prod(pre_flatten_shape[1:])))
-        dec_conv_layers.insert(1, View(pre_flatten_shape, bs=True))
+        dec_conv_layers.insert(0, nn.Linear(z_dim, np.prod(pre_flatten_shape[1:])))  # (2, 64*7*7=3136)
+        dec_conv_layers.insert(1, View(pre_flatten_shape, bs=True))  # View([batch_size, 64, 7, 7])
         self.dec_conv_layers = nn.Sequential(*dec_conv_layers)
 
     def forward(self, x):
         x = self.enc_conv_layers(x)
         return self.dec_conv_layers(x)
+
+
+if __name__ == '__main__':
+    train_ds = torch.randn((2, 1, 28, 28))
+    model = Autoencoder(train_ds, in_c=1, enc_out_c=[32, 64, 64, 64],
+                        enc_ks=[3, 3, 3, 3], enc_pads=[1, 1, 1, 1], enc_strides=[1, 2, 2, 1],
+                        dec_out_c=[64, 64, 32, 1], dec_ks=[3, 3, 3, 3], dec_strides=[1, 2, 2, 1],
+                        dec_pads=[1, 1, 1, 1], dec_op_pads=[0, 1, 1, 0], z_dim=2)
